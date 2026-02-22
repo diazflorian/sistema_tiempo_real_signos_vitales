@@ -52,6 +52,72 @@ class Color:
     NEGRITA = "\033[1m"
 
 # ──────────────────────────────────────────────────────────────
+# SEMÁFORO DEL PACIENTE
+# Verde    → todos los signos vitales normales
+# Amarillo → 1 signo fuera de rango (precaución)
+# Rojo     → 2 o más signos críticos simultáneos
+# ──────────────────────────────────────────────────────────────
+class SemaforoPaciente:
+    """
+    Suscriptor que escucha todos los canales de signos vitales
+    y actualiza el estado visual del semáforo del paciente.
+
+    Estado:
+      VERDE    → todos los signos en rango normal
+      AMARILLO → 1 signo fuera de rango (precaución)
+      ROJO     → 2 o más signos críticos (emergencia)
+    """
+    def __init__(self):
+        self._estados = {"ECG": False, "PA": False, "SPO2": False, "TEMP": False}
+        self._lock    = threading.Lock()
+        self._ultimo  = None  # Evita redibujar si no cambió
+
+    def actualizar(self, canal, mensaje):
+        tipo    = mensaje["tipo"]
+        critico = mensaje["critico"]
+
+        with self._lock:
+            self._estados[tipo] = critico
+            n_criticos = sum(self._estados.values())
+
+            if n_criticos == 0:
+                estado = "VERDE"
+            elif n_criticos == 1:
+                estado = "AMARILLO"
+            else:
+                estado = "ROJO"
+
+            if estado != self._ultimo:
+                self._ultimo = estado
+                self._mostrar(estado, n_criticos)
+
+    def _mostrar(self, estado, n_criticos):
+        with lock_consola:
+            if estado == "VERDE":
+                color = Color.VERDE
+                luz   = "🟢"
+                texto = "VERDE    — Paciente estable. Todos los signos normales."
+            elif estado == "AMARILLO":
+                color = Color.AMARILLO
+                luz   = "🟡"
+                texto = "AMARILLO — Precaución. 1 signo vital fuera de rango."
+            else:
+                color = Color.ROJO
+                luz   = "🔴"
+                texto = f"ROJO     — ¡EMERGENCIA! {n_criticos} signos críticos."
+
+            print(
+                f"\n  {color}{Color.NEGRITA}"
+                f"  ┌──────────────────────────────────────────────────┐\n"
+                f"  │  SEMÁFORO PACIENTE  {luz}  {texto:<30}│\n"
+                f"  └──────────────────────────────────────────────────┘"
+                f"{Color.RESET}\n"
+            )
+
+# Instancia global del semáforo
+semaforo = SemaforoPaciente()
+
+# ──────────────────────────────────────────────────────────────
 # SIMULADORES DE SENSORES
 # (5% probabilidad de valor crítico para demostración)
 # ──────────────────────────────────────────────────────────────
@@ -245,6 +311,7 @@ def main():
     print("   • SignosVitales:PresionArterial(cada 200ms - Prioridad 2)")
     print("   • SignosVitales:SpO2           (cada 500ms - Prioridad 3)")
     print("   • SignosVitales:Temperatura    (cada 2000ms- Prioridad 4)")
+    print(f"   • {Color.VERDE}🟢{Color.AMARILLO}🟡{Color.ROJO}🔴{Color.RESET} Semáforo del paciente (suscrito a todos los canales)")
     print()
 
     input(f"  {Color.BLANCO}Presiona ENTER para iniciar el monitoreo...{Color.RESET}")
@@ -254,6 +321,7 @@ def main():
     for canal in ["SignosVitales:ECG", "SignosVitales:PA",
                   "SignosVitales:SPO2", "SignosVitales:TEMP"]:
         broker.suscribir(canal, mostrar_lectura)
+        broker.suscribir(canal, semaforo.actualizar)   # ← semáforo escucha todos los canales
     broker.suscribir("ALARMAS", mostrar_alarma)
 
     # Evento de parada compartido entre hilos
