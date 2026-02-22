@@ -95,7 +95,7 @@ Margen de seguridad: 39.8%
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/TU_USUARIO/SignosVitales.git
+git clone https://github.com/diazflorian/SignosVitales.git
 cd SignosVitales/src
 
 # 2. Ejecutar directamente
